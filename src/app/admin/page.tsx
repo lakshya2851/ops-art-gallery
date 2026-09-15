@@ -5,19 +5,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { Artwork } from "@/data/artworks";
 import {
-  getStoredArtworks,
   saveNewArtwork,
   deleteArtworkFromCatalogue,
   resetCatalogueToDefault,
+  useArtworks,
 } from "@/lib/artworkStore";
-import { Plus, Trash2, Lock, Image as ImageIcon, CheckCircle, ArrowLeft, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Lock, Image as ImageIcon, CheckCircle, ArrowLeft, RefreshCw, Loader2 } from "lucide-react";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passcode, setPasscode] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const { artworks, refresh } = useArtworks();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   // Form State
@@ -37,7 +38,6 @@ export default function AdminPage() {
       const auth = sessionStorage.getItem("ops_admin_authed");
       if (auth === "true") {
         setIsAuthenticated(true);
-        setArtworks(getStoredArtworks());
       }
     }
   }, []);
@@ -47,7 +47,6 @@ export default function AdminPage() {
     if (passcode === "opsart2026" || passcode === "admin") {
       setIsAuthenticated(true);
       sessionStorage.setItem("ops_admin_authed", "true");
-      setArtworks(getStoredArtworks());
       setLoginError("");
     } else {
       setLoginError("Incorrect passcode. Please try again.");
@@ -66,14 +65,16 @@ export default function AdminPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!imagePreview) {
       alert("Please upload an artwork image file");
       return;
     }
 
-    const newPiece = saveNewArtwork({
+    setIsSubmitting(true);
+
+    const newPiece = await saveNewArtwork({
       title,
       artist,
       year: Number(year),
@@ -86,8 +87,9 @@ export default function AdminPage() {
       description,
     });
 
-    setArtworks(getStoredArtworks());
-    setSuccessMessage(`" ${newPiece.title} " added to catalogue successfully!`);
+    await refresh();
+    setIsSubmitting(false);
+    setSuccessMessage(`" ${newPiece.title} " published globally across all devices!`);
 
     // Reset Form
     setTitle("");
@@ -99,22 +101,22 @@ export default function AdminPage() {
     setDescription("");
     setImagePreview("");
 
-    setTimeout(() => setSuccessMessage(""), 4000);
+    setTimeout(() => setSuccessMessage(""), 5000);
   };
 
-  const handleDelete = (id: string, itemTitle: string) => {
-    if (confirm(`Are you sure you want to delete "${itemTitle}" from the public catalogue?`)) {
-      deleteArtworkFromCatalogue(id);
-      setArtworks(getStoredArtworks());
-      setSuccessMessage(`"${itemTitle}" removed from public catalogue.`);
+  const handleDelete = async (id: string, itemTitle: string) => {
+    if (confirm(`Are you sure you want to delete "${itemTitle}" from the public catalogue globally?`)) {
+      await deleteArtworkFromCatalogue(id);
+      await refresh();
+      setSuccessMessage(`"${itemTitle}" removed from catalogue.`);
       setTimeout(() => setSuccessMessage(""), 4000);
     }
   };
 
-  const handleResetDefaults = () => {
-    if (confirm("Reset catalogue back to original default archive? This will restore all default items.")) {
+  const handleResetDefaults = async () => {
+    if (confirm("Reset catalogue back to original default archive?")) {
       resetCatalogueToDefault();
-      setArtworks(getStoredArtworks());
+      await refresh();
       setSuccessMessage("Catalogue reset to default archive.");
       setTimeout(() => setSuccessMessage(""), 4000);
     }
@@ -129,7 +131,7 @@ export default function AdminPage() {
           </div>
           <h1 className="font-serif text-2xl text-gallery-white">Gallery Admin Portal</h1>
           <p className="text-xs text-gallery-muted">
-            Enter passcode to upload or delete paintings.
+            Enter passcode to upload or delete paintings globally.
           </p>
         </div>
 
@@ -165,7 +167,7 @@ export default function AdminPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-8">
         <div>
-          <span className="eyebrow-label">Curatorial Management</span>
+          <span className="eyebrow-label">Curatorial Cloud Management</span>
           <h1 className="heading-1 text-gallery-white">Admin Dashboard</h1>
         </div>
         <div className="flex items-center space-x-4">
@@ -199,16 +201,15 @@ export default function AdminPage() {
         <div className="border-b border-white/10 pb-4">
           <h2 className="font-serif text-2xl text-gallery-white flex items-center space-x-2">
             <Plus size={20} className="text-gallery-brass" />
-            <span>Upload New Artwork</span>
+            <span>Upload New Painting (Cloud Sync)</span>
           </h2>
           <p className="text-xs text-gallery-muted pt-1">
-            Fill in details and upload an image file. Uploaded paintings instantly display in the live gallery.
+            Uploaded paintings automatically publish to cloud storage and sync across all phones and computers globally.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Title */}
             <div className="space-y-2">
               <label className="block text-xs uppercase tracking-wider text-gallery-muted">
                 Artwork Title <span className="text-gallery-brass">*</span>
@@ -223,7 +224,6 @@ export default function AdminPage() {
               />
             </div>
 
-            {/* Artist / Creator */}
             <div className="space-y-2">
               <label className="block text-xs uppercase tracking-wider text-gallery-muted">
                 Artist / Creator Name <span className="text-gallery-brass">*</span>
@@ -240,7 +240,6 @@ export default function AdminPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {/* Year */}
             <div className="space-y-2">
               <label className="block text-xs uppercase tracking-wider text-gallery-muted">
                 Creation Year <span className="text-gallery-brass">*</span>
@@ -254,7 +253,6 @@ export default function AdminPage() {
               />
             </div>
 
-            {/* Medium */}
             <div className="space-y-2">
               <label className="block text-xs uppercase tracking-wider text-gallery-muted">
                 Medium / Technique <span className="text-gallery-brass">*</span>
@@ -273,7 +271,6 @@ export default function AdminPage() {
               </select>
             </div>
 
-            {/* Collection */}
             <div className="space-y-2">
               <label className="block text-xs uppercase tracking-wider text-gallery-muted">
                 Collection Tag
@@ -289,7 +286,6 @@ export default function AdminPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Dimensions (Optional) */}
             <div className="space-y-2">
               <label className="block text-xs uppercase tracking-wider text-gallery-muted">
                 Size / Dimensions (Optional)
@@ -303,7 +299,6 @@ export default function AdminPage() {
               />
             </div>
 
-            {/* Price (Optional) */}
             <div className="space-y-2">
               <label className="block text-xs uppercase tracking-wider text-gallery-muted">
                 Valuation / Price (Optional)
@@ -318,7 +313,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Image File Upload */}
           <div className="space-y-2">
             <label className="block text-xs uppercase tracking-wider text-gallery-muted">
               Painting Image File <span className="text-gallery-brass">*</span>
@@ -350,7 +344,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <label className="block text-xs uppercase tracking-wider text-gallery-muted">
               Curatorial Statement / Description
@@ -366,9 +359,17 @@ export default function AdminPage() {
 
           <button
             type="submit"
-            className="w-full py-4 bg-gallery-brass text-gallery-dark text-xs uppercase tracking-[0.25em] font-medium hover:bg-gallery-brass-hover transition-colors"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-gallery-brass text-gallery-dark text-xs uppercase tracking-[0.25em] font-medium hover:bg-gallery-brass-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50"
           >
-            Publish Painting To Gallery
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Uploading To Cloud...</span>
+              </>
+            ) : (
+              <span>Publish Painting Globally</span>
+            )}
           </button>
         </form>
       </div>
@@ -377,7 +378,7 @@ export default function AdminPage() {
       <div className="bg-[#12110F] border border-white/10 p-8 space-y-6">
         <div className="flex justify-between items-center border-b border-white/10 pb-4">
           <h3 className="font-serif text-xl text-gallery-white">Active Catalogue Paintings ({artworks.length})</h3>
-          <span className="text-xs text-gallery-muted">Click Delete to remove any artwork from public catalogue</span>
+          <span className="text-xs text-gallery-muted">Click Delete to remove any artwork from public catalogue globally</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -395,7 +396,7 @@ export default function AdminPage() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {artworks.map((item) => {
-                const isCustom = item.id.startsWith("custom-art-");
+                const isCustom = item.id.startsWith("custom-art-") || item.id.startsWith("cloud-art-");
                 return (
                   <tr key={item.id} className="hover:bg-white/5">
                     <td className="p-3">
@@ -415,7 +416,7 @@ export default function AdminPage() {
                     <td className="p-3">{item.medium}</td>
                     <td className="p-3">
                       {isCustom ? (
-                        <span className="text-gallery-brass font-medium">Custom Upload</span>
+                        <span className="text-gallery-brass font-medium">Cloud Upload</span>
                       ) : (
                         <span className="text-gallery-muted">Standard Archive</span>
                       )}
